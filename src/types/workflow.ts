@@ -7,3 +7,7 @@ export type DecisionNodeData = {
 export type DecisionEdgeData = {
   decision: Decision;
 };
+
+export type Workflow = {
+  rootNodeId: string | null;
+};

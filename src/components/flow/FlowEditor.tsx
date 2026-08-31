@@ -16,6 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import DecisionNode from "./DecisionNode";
+import { Textarea } from "../ui/textarea";
 
 const nodeTypes = {
   decision: DecisionNode,
@@ -37,6 +38,39 @@ const initialNodes: Node[] = [
 
 const initialEdges: Edge[] = [];
 
+function wouldCreateCycle(
+  source: string,
+  target: string,
+  edges: Edge[]
+) {
+  const visited = new Set<string>();
+
+  function canReach(
+    current: string,
+    goal: string
+  ): boolean {
+    if (current === goal) {
+      return true;
+    }
+
+    if (visited.has(current)) {
+      return false;
+    }
+
+    visited.add(current);
+
+    const outgoingEdges = edges.filter(
+      (edge) => edge.source === current
+    );
+
+    return outgoingEdges.some((edge) =>
+      canReach(edge.target, goal)
+    );
+  }
+
+  return canReach(target, source);
+}
+
 export default function FlowEditor() {
   const [nodes, setNodes, onNodesChange] =
     useNodesState(initialNodes);
@@ -45,6 +79,18 @@ export default function FlowEditor() {
     useEdgesState(initialEdges);
 
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [rootNodeId, setRootNodeId] = useState<string | null>("1");
+
+  const [selectedNodeId, setSelectedNodeId] =
+  useState<string | null>(null);
+
+  const [workflowInput, setWorkflowInput] = useState("");
+
+  const [isRunning, setIsRunning] = useState(false);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+  const [executionLog, setExecutionLog] = useState<
+    { nodeId: string; result: "YES" | "NO" }[]
+  >([]);
 
   // Load workflow from localStorage once when the page opens
   useEffect(() => {
@@ -60,6 +106,14 @@ export default function FlowEditor() {
 
         if (parsed.edges) {
           setEdges(parsed.edges);
+        }
+
+        if (parsed.rootNodeId) {
+          setRootNodeId(parsed.rootNodeId);
+        }
+
+        if (typeof parsed.workflowInput === "string") {
+          setWorkflowInput(parsed.workflowInput);
         }
       } catch {
         console.error("Failed to load workflow");
@@ -78,11 +132,13 @@ export default function FlowEditor() {
     localStorage.setItem(
       "workflow",
       JSON.stringify({
+        rootNodeId,
+        workflowInput,
         nodes,
         edges,
       })
     );
-  }, [nodes, edges, hasLoaded]);
+  }, [nodes, edges, rootNodeId, workflowInput, hasLoaded]);
 
   const updatePrompt = useCallback(
     (nodeId: string, prompt: string) => {
@@ -108,41 +164,63 @@ export default function FlowEditor() {
     data: {
       ...node.data,
       onPromptChange: updatePrompt,
+      isRoot: node.id === rootNodeId,
+      isActive: node.id === activeNodeId,
     },
   }));
 
   const onConnect = useCallback(
     (connection: Connection) => {
-        const decision =
-        connection.sourceHandle === "yes"
-            ? "YES"
-            : "NO";
-
-        const duplicateEdge = edges.some(
-        (edge) =>
-            edge.source === connection.source &&
-            edge.sourceHandle === connection.sourceHandle
-        );
-
-        if (duplicateEdge) {
+      if (!connection.source || !connection.target) {
         return;
-        }
+      }
 
-        const newEdge: Edge = {
+      // Prevent self-connections
+      if (connection.source === connection.target) {
+        return;
+      }
+
+      // Prevent cycles
+      if (
+        wouldCreateCycle(
+          connection.source,
+          connection.target,
+          edges
+        )
+      ) {
+        return;
+      }
+
+      const decision =
+        connection.sourceHandle === "yes"
+          ? "YES"
+          : "NO";
+
+      const duplicateEdge = edges.some(
+        (edge) =>
+          edge.source === connection.source &&
+          edge.sourceHandle === connection.sourceHandle
+      );
+
+      if (duplicateEdge) {
+        return;
+      }
+
+      const newEdge: Edge = {
         ...connection,
         id: `edge-${crypto.randomUUID()}`,
         label: decision,
         data: {
-            decision,
+          decision,
         },
-        };
+      };
 
-        setEdges((currentEdges) =>
+      setEdges((currentEdges) =>
         addEdge(newEdge, currentEdges)
-        );
+      );
     },
     [edges, setEdges]
-    );
+  );
 
   const addDecisionNode = () => {
     const id = crypto.randomUUID();
@@ -165,13 +243,101 @@ export default function FlowEditor() {
     ]);
   };
 
+  const runMockWorkflow = async () => {
+    if (!rootNodeId) {
+      return;
+    }
+
+    setIsRunning(true);
+    setExecutionLog([]);
+
+    let currentNodeId: string | null = rootNodeId;
+
+    while (currentNodeId) {
+      const currentNode = nodes.find(
+        (node) => node.id === currentNodeId
+      );
+
+      if (!currentNode) {
+        break;
+      }
+
+      setActiveNodeId(currentNodeId);
+
+      // Pause so you can visually see traversal
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Temporary fake AI answer
+      const result: "YES" | "NO" =
+        Math.random() > 0.5 ? "YES" : "NO";
+
+      setExecutionLog((current) => [
+        ...current,
+        {
+          nodeId: currentNodeId!,
+          result,
+        },
+      ]);
+
+      const nextEdge = edges.find(
+        (edge) =>
+          edge.source === currentNodeId &&
+          edge.data?.decision === result
+      );
+
+      if (!nextEdge) {
+        currentNodeId = null;
+      } else {
+        currentNodeId = nextEdge.target;
+      }
+    }
+
+    setActiveNodeId(null);
+    setIsRunning(false);
+  };
+
   return (
     <div className="h-screen w-screen">
-      <div className="absolute left-4 top-4 z-10">
-        <Button onClick={addDecisionNode}>
-          Add Decision Node
-        </Button>
+      <div className="absolute left-4 top-4 z-10 w-96 space-y-3">
+        <div className="rounded-xl border bg-background p-4 shadow-sm">
+          <div className="mb-2 text-sm font-medium">
+            Workflow Input
+          </div>
+
+          <Textarea
+            value={workflowInput}
+            onChange={(e) => setWorkflowInput(e.target.value)}
+            placeholder="Enter the text or context that the AI should evaluate..."
+            className="min-h-28"
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <Button onClick={addDecisionNode}>
+            Add Decision Node
+          </Button>
+
+          <Button
+            variant="secondary"
+            disabled={!selectedNodeId}
+            onClick={() => {
+              if (selectedNodeId) {
+                setRootNodeId(selectedNodeId);
+              }
+            }}
+          >
+            Set as Root
+          </Button>
+
+          <Button
+            disabled={!rootNodeId || isRunning}
+            onClick={runMockWorkflow}
+          >
+            {isRunning ? "Running..." : "Run Workflow"}
+          </Button>
+        </div>
       </div>
+      
 
       <ReactFlow
         nodes={nodesWithCallbacks}
@@ -179,6 +345,9 @@ export default function FlowEditor() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeClick={(_, node) => {
+          setSelectedNodeId(node.id);
+        }}
         nodeTypes={nodeTypes}
         fitView
       >

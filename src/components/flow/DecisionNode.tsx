@@ -6,6 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 
 type DecisionNodeData = {
   prompt: string;
+  isRoot?: boolean;
+  isActive?: boolean;
   onPromptChange?: (nodeId: string, prompt: string) => void;
 };
 
@@ -16,11 +18,21 @@ export default function DecisionNode({
   const nodeData = data as DecisionNodeData;
 
   return (
-    <Card className="w-72">
+    <Card
+      className={`w-72 ${
+        nodeData.isActive ? "ring-2 ring-primary" : ""
+      }`}
+    >
       <CardHeader className="pb-3">
         <CardTitle className="text-sm">
-          Decision Node
+          {nodeData.isRoot ? "Root Decision Node" : "Decision Node"}
         </CardTitle>
+
+        {nodeData.isRoot && (
+          <div className="text-xs font-medium">
+            START
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-4">
