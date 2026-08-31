@@ -16,6 +16,14 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+To run the Inngest UI locally:
+
+```bash
+docker run --rm -p 8288:8288 inngest/inngest inngest dev -u http://host.docker.internal:3000/api/inngest
+```
+
+Then open [http://localhost:8288](http://localhost:8288) in your browser to view the Inngest dashboard.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
