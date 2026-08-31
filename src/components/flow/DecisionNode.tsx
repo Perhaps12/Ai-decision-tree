@@ -8,6 +8,8 @@ type DecisionNodeData = {
   prompt: string;
   isRoot?: boolean;
   isActive?: boolean;
+  isVisited?: boolean;
+  selectedDecision?: "YES" | "NO";
   onPromptChange?: (nodeId: string, prompt: string) => void;
 };
 
@@ -19,8 +21,12 @@ export default function DecisionNode({
 
   return (
     <Card
-      className={`w-72 ${
-        nodeData.isActive ? "ring-2 ring-primary" : ""
+      className={`w-72 transition-all ${
+        nodeData.isActive
+          ? "ring-2 ring-black"
+          : nodeData.isVisited
+            ? "ring-2 ring-blue-700"
+            : ""
       }`}
     >
       <CardHeader className="pb-3">
@@ -45,9 +51,26 @@ export default function DecisionNode({
           }
         />
 
-        <div className="flex justify-between text-xs font-medium">
-          <span>NO</span>
-          <span>YES</span>
+        <div className="flex justify-between text-xs">
+          <span
+            className={
+              nodeData.selectedDecision === "NO"
+                ? "font-bold text-blue-700 test-lg"
+                : "font-medium test-lg"
+            }
+          >
+            NO
+          </span>
+
+          <span
+            className={
+              nodeData.selectedDecision === "YES"
+                ? "font-bold text-blue-700 test-lg"
+                : "font-medium test-lg"
+            }
+          >
+            YES
+          </span>
         </div>
       </CardContent>
 

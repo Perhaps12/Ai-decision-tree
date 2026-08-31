@@ -13,6 +13,8 @@ import {
   type Edge,
   type Node,
 } from "@xyflow/react";
+import { useRealtime } from "inngest/react";
+import { workflowChannel } from "@/inngest/channels";
 
 import { Button } from "@/components/ui/button";
 import DecisionNode from "./DecisionNode";
@@ -92,6 +94,9 @@ export default function FlowEditor() {
     { nodeId: string; result: "YES" | "NO" }[]
   >([]);
 
+  const [eventId, setEventId] =
+  useState<string | null>(null);
+
   // Load workflow from localStorage once when the page opens
   useEffect(() => {
     const saved = localStorage.getItem("workflow");
@@ -159,15 +164,29 @@ export default function FlowEditor() {
     [setNodes]
   );
 
-  const nodesWithCallbacks = nodes.map((node) => ({
-    ...node,
-    data: {
-      ...node.data,
-      onPromptChange: updatePrompt,
-      isRoot: node.id === rootNodeId,
-      isActive: node.id === activeNodeId,
-    },
-  }));
+  const nodesWithCallbacks = nodes.map((node) => {
+    const executionStep = executionLog.find(
+      (step) => step.nodeId === node.id
+    );
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        onPromptChange: updatePrompt,
+        isRoot: node.id === rootNodeId,
+
+        // Currently being evaluated
+        isActive: node.id === activeNodeId,
+
+        // Already evaluated during this run
+        isVisited: !!executionStep,
+
+        // YES or NO chosen at this node
+        selectedDecision: executionStep?.result,
+      },
+    };
+  });
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -296,6 +315,109 @@ export default function FlowEditor() {
     setIsRunning(false);
   };
 
+  const runWorkflow = async () => {
+    if (!rootNodeId || isRunning) {
+      return;
+    }
+
+    setIsRunning(true);
+    setExecutionLog([]);
+    setActiveNodeId(null);
+
+    try {
+      const response = await fetch("/api/workflow/run", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rootNodeId,
+          workflowInput,
+          nodes,
+          edges,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to run workflow");
+      }
+
+      setEventId(data.eventId);
+
+      console.log("Workflow started:", data.eventId);
+    } catch (error) {
+      console.error(error);
+      setIsRunning(false);
+    }
+  };
+
+  const realtimeChannel = eventId
+    ? workflowChannel({ eventId })
+    : undefined;
+
+  const {
+    messages,
+    connectionStatus,
+    runStatus,
+  } = useRealtime({
+    channel: realtimeChannel,
+    topics: [
+      "active",
+      "execution",
+      "complete",
+    ] as const,
+
+    token: eventId
+      ? () =>
+          fetch(
+            `/api/realtime-token?eventId=${eventId}`
+          ).then((response) => {
+            if (!response.ok) {
+              throw new Error(
+                "Failed to get realtime token"
+              );
+            }
+
+            return response.json();
+          })
+      : undefined,
+
+    enabled: !!eventId,
+  });
+
+  useEffect(() => {
+    for (const message of messages.delta) {
+      // Realtime also sends run lifecycle messages.
+      // We only want our published topic data here.
+      if (message.kind !== "data") {
+        continue;
+      }
+
+      if (message.topic === "active") {
+        setActiveNodeId(message.data.nodeId);
+      }
+
+      if (message.topic === "execution") {
+        setActiveNodeId(null);
+
+        setExecutionLog((current) => [
+          ...current,
+          {
+            nodeId: message.data.nodeId,
+            result: message.data.result,
+          },
+        ]);
+      }
+
+      if (message.topic === "complete") {
+        setActiveNodeId(null);
+        setIsRunning(false);
+      }
+    }
+  }, [messages.delta]);
+
   return (
     <div className="h-screen w-screen">
       <div className="absolute left-4 top-4 z-10 w-96 space-y-3">
@@ -329,9 +451,13 @@ export default function FlowEditor() {
             Set as Root
           </Button>
 
+          <Button onClick={runMockWorkflow}>
+            Mock Run
+          </Button>
+
           <Button
-            disabled={!rootNodeId || isRunning}
-            onClick={runMockWorkflow}
+            disabled={!rootNodeId || !workflowInput.trim() || isRunning}
+            onClick={runWorkflow}
           >
             {isRunning ? "Running..." : "Run Workflow"}
           </Button>
