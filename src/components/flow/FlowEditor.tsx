@@ -440,9 +440,52 @@ export default function FlowEditor() {
     };
   });
 
+  const exportWorkflow = () => {
+    const workflow = {
+      rootNodeId,
+      workflowInput,
+      nodes,
+      edges,
+    };
+
+    const blob = new Blob(
+      [JSON.stringify(workflow, null, 2)],
+      {
+        type: "application/json",
+      }
+    );
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "workflow.json";
+    link.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  const importWorkflow = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const text = await file.text();
+    const workflow = JSON.parse(text);
+
+    setNodes(workflow.nodes ?? []);
+    setEdges(workflow.edges ?? []);
+    setRootNodeId(workflow.rootNodeId ?? null);
+    setWorkflowInput(workflow.workflowInput ?? "");
+  };
+
   return (
     <div className="h-screen w-screen">
-      <div className="absolute left-4 top-4 z-10 w-96 space-y-3">
+      <div className="absolute left-4 top-4 z-10 w-[calc(24rem+3rem)] space-y-3">
         <div className="rounded-xl border bg-background p-4 shadow-sm">
           <div className="mb-2 text-sm font-medium">
             Workflow Input
@@ -452,7 +495,7 @@ export default function FlowEditor() {
             value={workflowInput}
             onChange={(e) => setWorkflowInput(e.target.value)}
             placeholder="Enter the text or context that the AI should evaluate..."
-            className="min-h-28"
+            className="min-h-28 w-full"
           />
         </div>
 
@@ -484,6 +527,22 @@ export default function FlowEditor() {
             {isRunning ? "Running..." : "Run Workflow"}
           </Button>
         </div>
+      </div>
+
+      <div className="absolute bottom-4 left-16 z-10 w-[20rem] space-y-3">
+        <Button onClick={exportWorkflow}>
+          Export JSON
+        </Button>
+
+        <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground ring-offset-background transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+          Import JSON
+          <input
+            type="file"
+            accept=".json,application/json"
+            onChange={importWorkflow}
+            className="hidden"
+          />
+        </label>
       </div>
       
 
