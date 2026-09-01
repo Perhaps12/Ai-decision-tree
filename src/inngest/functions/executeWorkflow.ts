@@ -111,7 +111,7 @@ export const executeWorkflow = inngest.createFunction(
       } else {
         await step.sleep(
           `rate-limit-delay-${nodeId}`,
-          "15s"
+          "3s"
         );
 
         currentNodeId = matchingEdge.target;

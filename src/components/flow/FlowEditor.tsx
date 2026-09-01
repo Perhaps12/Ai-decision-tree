@@ -91,8 +91,13 @@ export default function FlowEditor() {
   const [isRunning, setIsRunning] = useState(false);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [executionLog, setExecutionLog] = useState<
-    { nodeId: string; result: "YES" | "NO" }[]
+    { nodeId: string; result: "YES" | "NO" ; edgeId?: string | null;}[]
   >([]);
+  const executedEdgeIds = new Set(
+    executionLog
+      .map((step) => step.edgeId)
+      .filter(Boolean)
+  );
 
   const [eventId, setEventId] =
   useState<string | null>(null);
@@ -290,19 +295,20 @@ export default function FlowEditor() {
       const result: "YES" | "NO" =
         Math.random() > 0.5 ? "YES" : "NO";
 
-      setExecutionLog((current) => [
-        ...current,
-        {
-          nodeId: currentNodeId!,
-          result,
-        },
-      ]);
-
       const nextEdge = edges.find(
         (edge) =>
           edge.source === currentNodeId &&
           edge.data?.decision === result
       );
+
+      setExecutionLog((current) => [
+        ...current,
+        {
+          nodeId: currentNodeId!,
+          result,
+          edgeId: nextEdge?.id ?? null,
+        },
+      ]);
 
       if (!nextEdge) {
         currentNodeId = null;
@@ -407,6 +413,7 @@ export default function FlowEditor() {
           {
             nodeId: message.data.nodeId,
             result: message.data.result,
+            edgeId: message.data.edgeId,
           },
         ]);
       }
@@ -417,6 +424,21 @@ export default function FlowEditor() {
       }
     }
   }, [messages.delta]);
+
+  const displayedEdges = edges.map((edge) => {
+    const wasExecuted = executedEdgeIds.has(edge.id);
+
+    return {
+      ...edge,
+      animated: wasExecuted,
+      style: wasExecuted
+        ? {
+            stroke: "#1d4ed8",
+            strokeWidth: 3,
+          }
+        : undefined,
+    };
+  });
 
   return (
     <div className="h-screen w-screen">
@@ -467,7 +489,7 @@ export default function FlowEditor() {
 
       <ReactFlow
         nodes={nodesWithCallbacks}
-        edges={edges}
+        edges={displayedEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
