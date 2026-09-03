@@ -485,7 +485,9 @@ export default function FlowEditor() {
 
   return (
     <div className="h-screen w-screen">
+      {/* Top Right section */}
       <div className="absolute left-4 top-4 z-10 w-[calc(24rem+3rem)] space-y-3">
+        {/* input box */}
         <div className="rounded-xl border bg-background p-4 shadow-sm">
           <div className="mb-2 text-sm font-medium">
             Workflow Input
@@ -498,7 +500,7 @@ export default function FlowEditor() {
             className="min-h-28 w-full"
           />
         </div>
-
+        {/* Node addition + running commands */}
         <div className="flex gap-2">
           <Button onClick={addDecisionNode}>
             Add Decision Node
@@ -529,6 +531,7 @@ export default function FlowEditor() {
         </div>
       </div>
 
+      {/* Bottom Left section (export import) */}
       <div className="absolute bottom-4 left-16 z-10 w-[20rem] space-y-3">
         <Button onClick={exportWorkflow}>
           Export JSON
@@ -544,8 +547,90 @@ export default function FlowEditor() {
           />
         </label>
       </div>
-      
 
+      {/* Right section (execution log) */}
+      <div className="absolute right-4 top-4 z-10 w-80 rounded-xl border bg-background p-4 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">
+            Execution Log
+          </h2>
+
+          <span className="text-sm text-muted-foreground">
+            {isRunning
+              ? "Running"
+              : executionLog.length > 0
+                ? "Completed"
+                : "Idle"}
+          </span>
+        </div>
+
+        <div className="max-h-[70vh] space-y-3 overflow-y-auto">
+          {executionLog.length === 0 && !activeNodeId ? (
+            <p className="text-sm text-muted-foreground">
+              Run a workflow to see AI decisions here.
+            </p>
+          ) : (
+            <>
+              {executionLog.map((step, index) => {
+                const node = nodes.find(
+                  (node) => node.id === step.nodeId
+                );
+
+                return (
+                  <div
+                    key={`${step.nodeId}-${index}`}
+                    className="rounded-lg border p-3"
+                  >
+                    <div className="mb-1 text-xs text-muted-foreground">
+                      Step {index + 1}
+                    </div>
+
+                    <div className="text-sm font-medium">
+                      {String(
+                        node?.data.prompt ?? "Unknown node"
+                      )}
+                    </div>
+
+                    <div className="mt-2">
+                      <span className="text-sm text-muted-foreground">
+                        AI Decision:{" "}
+                      </span>
+
+                      <span
+                        className={`text-sm font-bold text-blue-700`}
+                      >
+                        {step.result}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {activeNodeId && (
+                <div className="rounded-lg border p-3">
+                  <div className="mb-1 text-xs text-muted-foreground">
+                    Step {executionLog.length + 1}
+                  </div>
+
+                  <div className="text-sm font-medium">
+                    {String(
+                      nodes.find(
+                        (node) => node.id === activeNodeId
+                      )?.data.prompt ?? "Unknown node"
+                    )}
+                  </div>
+
+                  <div className="mt-2 text-sm font-medium">
+                    Evaluating...
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+      
+      {/* react flow canvas */}
       <ReactFlow
         nodes={nodesWithCallbacks}
         edges={displayedEdges}
